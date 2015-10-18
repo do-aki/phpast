@@ -19,15 +19,11 @@ extern zend_module_entry phpast_module_entry;
 #include "TSRM.h"
 #endif
 
-/*
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:
-
-ZEND_BEGIN_MODULE_GLOBALS(phpast)
-	zend_long  global_value;
-	char *global_string;
+ZEND_BEGIN_MODULE_GLOBALS(phpast) /* {{{ */
+    zval hook_callable;
+    zval compiled_ast;
 ZEND_END_MODULE_GLOBALS(phpast)
-*/
+/* }}} */
 
 /* Always refer to the globals in your function as PHPAST_G(variable).
    You are encouraged to rename these macros something shorter, see
@@ -38,6 +34,43 @@ ZEND_END_MODULE_GLOBALS(phpast)
 #if defined(ZTS) && defined(COMPILE_DL_PHPAST)
 ZEND_TSRMLS_CACHE_EXTERN();
 #endif
+
+static void register_classes();
+static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast);
+
+void hook_ast_process();
+void unhook_ast_process();
+void php_ast_process(zend_ast *ast);
+
+
+PHP_METHOD(PHPAst, __construct);
+PHP_METHOD(PHPAst, __destruct);
+PHP_METHOD(PHPAst, eachChild);
+PHP_METHOD(PHPAst, getChildCount);
+PHP_METHOD(PHPAst, getKind);
+PHP_METHOD(PHPAst, getKindName);
+PHP_METHOD(PHPAst, export);
+PHP_METHOD(PHPAst, enableAstHook);
+PHP_METHOD(PHPAst, disableAstHook);
+PHP_METHOD(PHPAst, compileFile);
+
+
+typedef struct _phpast_obj {
+    zend_ast    *ast;
+    char         is_owner;
+    zend_array   children;
+    zend_object  std;
+} phpast_obj;
+
+static inline phpast_obj *phpast_obj_from_obj(zend_object *obj) {
+    return (phpast_obj*) ((char*)(obj) - XtOffsetOf(phpast_obj, std));
+}
+
+#define Z_PHPAST_P(zv) phpast_obj_from_obj(Z_OBJ_P((zv)))
+
+/* phpast_kind.c */
+void phpast_declare_kind_constant(zend_class_entry *ce);
+const char *phpast_get_kind_name(zend_ast_kind kind);
 
 #endif	/* PHP_PHPAST_H */
 

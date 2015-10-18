@@ -13,9 +13,8 @@ dnl [  --with-phpast             Include phpast support])
 
 dnl Otherwise use enable:
 
-dnl PHP_ARG_ENABLE(phpast, whether to enable phpast support,
-dnl Make sure that the comment is aligned:
-dnl [  --enable-phpast           Enable phpast support])
+PHP_ARG_ENABLE(phpast, whether to enable phpast support,
+[  --enable-phpast           Enable phpast support])
 
 if test "$PHP_PHPAST" != "no"; then
   dnl Write more examples of tests here...
@@ -59,5 +58,5 @@ if test "$PHP_PHPAST" != "no"; then
   dnl
   dnl PHP_SUBST(PHPAST_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(phpast, phpast.c, $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+  PHP_NEW_EXTENSION(phpast, phpast.c phpast_kind.c, $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 fi
