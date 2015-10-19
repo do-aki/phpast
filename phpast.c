@@ -424,6 +424,10 @@ PHP_METHOD(PHPAst, compileFile) /* {{{ */
 	op_array = compile_filename(ZEND_INCLUDE, &inc_file);
 	zend_ast_process = original;
 
+	if (UNEXPECTED(op_array == NULL)) {
+		RETURN_NULL();
+	}
+
 	destroy_op_array(op_array);
 	efree(op_array);
 
