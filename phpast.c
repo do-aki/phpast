@@ -166,6 +166,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_compileFile, 0, 0, 1)
 	ZEND_ARG_INFO(0, filename)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_compileString, 0, 0, 1)
+	ZEND_ARG_INFO(0, code)
+ZEND_END_ARG_INFO()
+
 
 static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, __construct, arginfo_phpast___construct, ZEND_ACC_CTOR|ZEND_ACC_PUBLIC)
@@ -178,6 +182,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, disableAstHook, arginfo_phpast_disableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, compileFile, arginfo_phpast_compileFile, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	PHP_ME(PHPAst, compileString, arginfo_phpast_compileString, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_FE_END
 };
 /* }}} */
@@ -424,6 +429,38 @@ PHP_METHOD(PHPAst, compileFile) /* {{{ */
 	op_array = compile_filename(ZEND_INCLUDE, &inc_file);
 	zend_ast_process = original;
 
+	if (UNEXPECTED(op_array == NULL)) {
+		RETURN_NULL();
+	}
+
+	destroy_op_array(op_array);
+	efree(op_array);
+
+	RETURN_ZVAL(&PHPAST_G(compiled_ast), 0, 0);
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, compileString) /* {{{ */
+{	
+	zend_string *code;
+	zend_op_array *op_array;
+	zend_ast_process_t original;
+	zval source_string;
+	char* eval_desc;
+
+	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+		Z_PARAM_STR(code)
+	ZEND_PARSE_PARAMETERS_END();
+
+	ZVAL_STR(&source_string, code);
+    eval_desc = zend_make_compiled_string_description("PHPAst::compileString");
+
+	original = zend_ast_process;
+	zend_ast_process = _php_ast_process;
+	op_array = compile_string(&source_string, eval_desc);
+	zend_ast_process = original;
+
+	efree(eval_desc);
 	if (UNEXPECTED(op_array == NULL)) {
 		RETURN_NULL();
 	}

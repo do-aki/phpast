@@ -53,6 +53,7 @@ PHP_METHOD(PHPAst, export);
 PHP_METHOD(PHPAst, enableAstHook);
 PHP_METHOD(PHPAst, disableAstHook);
 PHP_METHOD(PHPAst, compileFile);
+PHP_METHOD(PHPAst, compileString);
 
 
 typedef struct _phpast_obj {
