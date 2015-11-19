@@ -9,6 +9,8 @@
 #include "ext/spl/spl_exceptions.h"
 #include "php_phpast.h"
 
+#include <zend_language_parser.h>
+
 ZEND_DECLARE_MODULE_GLOBALS(phpast)
 
 /* True global resources - no need for thread safety here */
@@ -152,6 +154,12 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getKindName, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_isZval, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getZval, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_export, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -178,6 +186,8 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, getChildCount, arginfo_phpast_getChildCount, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getKind, arginfo_phpast_getKind, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getKindName, arginfo_phpast_getKindName, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, getZval, arginfo_phpast_getZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, export, arginfo_phpast_export, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, disableAstHook, arginfo_phpast_disableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -364,6 +374,29 @@ PHP_METHOD(PHPAst, getKindName) /* {{{ */
 
 	if (self->ast) {
 		RETURN_STRING(phpast_get_kind_name(self->ast->kind));
+	}
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, isZval) /* {{{ */
+{
+	zend_string *s;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	if (self->ast && self->ast->kind == ZEND_AST_ZVAL) {
+		RETURN_TRUE;
+	}
+	RETURN_FALSE;
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, getZval) /* {{{ */
+{
+	zend_string *s;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	if (self->ast && self->ast->kind == ZEND_AST_ZVAL) {
+		RETURN_ZVAL(zend_ast_get_zval(self->ast), 0, 0);
 	}
 }
 /* }}} */

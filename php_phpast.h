@@ -42,13 +42,14 @@ void hook_ast_process();
 void unhook_ast_process();
 void php_ast_process(zend_ast *ast);
 
-
 PHP_METHOD(PHPAst, __construct);
 PHP_METHOD(PHPAst, __destruct);
 PHP_METHOD(PHPAst, eachChild);
 PHP_METHOD(PHPAst, getChildCount);
 PHP_METHOD(PHPAst, getKind);
 PHP_METHOD(PHPAst, getKindName);
+PHP_METHOD(PHPAst, isZval);
+PHP_METHOD(PHPAst, getZval);
 PHP_METHOD(PHPAst, export);
 PHP_METHOD(PHPAst, enableAstHook);
 PHP_METHOD(PHPAst, disableAstHook);
