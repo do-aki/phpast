@@ -19,6 +19,8 @@ static zend_class_entry *ce_phpast;
 static zend_object_handlers phpast_object_handlers;
 zend_ast_process_t original_ast_process = NULL;
 
+static void ast_destroy(zend_ast *ast);
+static zend_ast *ast_copy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
 
@@ -523,6 +525,43 @@ PHP_METHOD(PHPAst, compileString) /* {{{ */
 }
 /* }}} */
 
+static void ast_destroy(zend_ast *ast) { /* {{{ */
+	if (ast == NULL) {
+		return;
+	}
+	
+	if (ast->kind == ZEND_AST_ZVAL) {
+		zval_ptr_dtor_nogc(zend_ast_get_zval(ast));
+	}
+	efree(ast);
+}
+/* }}} */
+
+static zend_ast *ast_copy(zend_ast *ast) { /* {{{ */
+	if (ast == NULL) {
+		return NULL;
+	} else if (ast->kind == ZEND_AST_ZVAL) {
+		zend_ast_zval *new = emalloc(sizeof(zend_ast_zval));
+		new->kind = ZEND_AST_ZVAL;
+		new->attr = ast->attr;
+		ZVAL_COPY(&new->val, zend_ast_get_zval(ast));
+		return (zend_ast *) new;
+	} else if (zend_ast_is_list(ast)) {
+		zend_ast_list *list = zend_ast_get_list(ast);
+		zend_ast_list *new = emalloc(sizeof(zend_ast_list) - sizeof(zend_ast *)); // no child
+		new->kind = list->kind;
+		new->attr = list->attr;
+		new->children = list->children;
+		return (zend_ast *)new;
+	} else {
+		zend_ast *new = emalloc(sizeof(zend_ast));
+		new->kind = ast->kind;
+		new->attr = ast->attr;
+		return new;
+	}
+}
+/* }}} */
+
 static zend_object *phpast_new(zend_class_entry *class_type) /* {{{ */
 {
 	phpast_obj *self;
@@ -538,13 +577,12 @@ static zend_object *phpast_new(zend_class_entry *class_type) /* {{{ */
 }
 /* }}} */
 
-
 static void phpast_free(zend_object *object) /* {{{ */
 {
 	phpast_obj *self = phpast_obj_from_obj(object);
 
 	if (self->ast && self->is_owner) {
-		zend_ast_destroy_and_free(self->ast);
+		ast_destroy(self->ast);
 	}
 
 	zend_hash_destroy(&self->children);
@@ -555,7 +593,6 @@ static void phpast_free(zend_object *object) /* {{{ */
 }
 /* }}} */
 
-
 static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 {
 	int i, num_children = 0;
@@ -565,7 +602,7 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 	object_init_ex(obj, ce_phpast);
 	self = Z_PHPAST_P(obj);
 	self->is_owner = 1;
-	self->ast = zend_ast_copy(ast);
+	self->ast = ast_copy(ast);
 
 	if (zend_ast_is_list(ast)) {
 		zend_ast_list *list = (zend_ast_list*)ast;
