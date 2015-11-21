@@ -19,6 +19,7 @@ static zend_class_entry *ce_phpast;
 static zend_object_handlers phpast_object_handlers;
 zend_ast_process_t original_ast_process = NULL;
 
+static int ast_is_decl(zend_ast *ast);
 static void ast_destroy(zend_ast *ast);
 static zend_ast *ast_copy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
@@ -347,6 +348,8 @@ PHP_METHOD(PHPAst, getChildCount) /* {{{ */
 	if (self->ast) {
 		if (zend_ast_is_list(self->ast)) {
 			RETURN_LONG(((zend_ast_list*)self->ast)->children);
+		} else if (ast_is_decl(self->ast)) {
+			RETURN_LONG(4);
 		} else {
 			RETURN_LONG(zend_ast_get_num_children(self->ast));
 		}
@@ -488,6 +491,17 @@ PHP_METHOD(PHPAst, compileString) /* {{{ */
 }
 /* }}} */
 
+static int ast_is_decl(zend_ast *ast) /* {{{ */
+{
+    return (
+        ast->kind == ZEND_AST_FUNC_DECL ||
+        ast->kind == ZEND_AST_CLOSURE ||
+        ast->kind == ZEND_AST_METHOD ||
+        ast->kind == ZEND_AST_CLASS
+    );
+}
+/* }}} */
+
 static void ast_destroy(zend_ast *ast) { /* {{{ */
 	if (ast == NULL) {
 		return;
@@ -509,13 +523,22 @@ static zend_ast *ast_copy(zend_ast *ast) { /* {{{ */
 		new->attr = ast->attr;
 		ZVAL_COPY(&new->val, zend_ast_get_zval(ast));
 		return (zend_ast *) new;
+	} else if (ast_is_decl(ast)) {
+		zend_ast_decl *decl = (zend_ast_decl *) ast;
+		zend_ast_decl *new = emalloc(sizeof(zend_ast_decl));
+		new->kind = decl->kind;
+		new->attr = decl->attr;
+		new->flags = decl->flags;
+		new->doc_comment = decl->doc_comment;
+		new->name = decl->name;
+		return (zend_ast *) new;
 	} else if (zend_ast_is_list(ast)) {
 		zend_ast_list *list = zend_ast_get_list(ast);
 		zend_ast_list *new = emalloc(sizeof(zend_ast_list) - sizeof(zend_ast *)); // no child
 		new->kind = list->kind;
 		new->attr = list->attr;
 		new->children = list->children;
-		return (zend_ast *)new;
+		return (zend_ast *) new;
 	} else {
 		zend_ast *new = emalloc(sizeof(zend_ast));
 		new->kind = ast->kind;
@@ -572,6 +595,10 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 		num_children = list->children;
 		children = list->child;
 //		php_printf("is_list (%d)\n", num_children);
+	} else if (ast_is_decl(ast)) {
+		zend_ast_decl *decl = (zend_ast_decl*)ast;
+		num_children = 4;
+		children = decl->child;
 	} else {
 		num_children = zend_ast_get_num_children(ast);
 		children = ast->child;
