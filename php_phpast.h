@@ -51,6 +51,8 @@ PHP_METHOD(PHPAst, getKindName);
 PHP_METHOD(PHPAst, isZval);
 PHP_METHOD(PHPAst, getZval);
 PHP_METHOD(PHPAst, export);
+PHP_METHOD(PHPAst, eval);
+PHP_METHOD(PHPAst, __toString);
 PHP_METHOD(PHPAst, enableAstHook);
 PHP_METHOD(PHPAst, disableAstHook);
 PHP_METHOD(PHPAst, compileFile);

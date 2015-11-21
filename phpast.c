@@ -163,6 +163,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_export, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_eval, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_enableAstHook, 0, 0, 1)
 	ZEND_ARG_INFO(0, callback)
 ZEND_END_ARG_INFO()
@@ -189,6 +192,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getZval, arginfo_phpast_getZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, export, arginfo_phpast_export, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, eval, arginfo_phpast_eval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, disableAstHook, arginfo_phpast_disableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, compileFile, arginfo_phpast_compileFile, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -414,6 +418,20 @@ PHP_METHOD(PHPAst, export) /* {{{ */
 }
 /* }}} */
 
+PHP_METHOD(PHPAst, eval) /* {{{ */
+{
+	zval *result;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	if (self->ast) {
+		if (zend_ast_evaluate(result, self->ast, NULL) == FAILURE) {
+			RETURN_NULL();
+		}
+		RETURN_ZVAL(result, 0, 0);
+	}
+
+}
+/* }}} */
 
 
 PHP_METHOD(PHPAst, enableAstHook) { /* {{{ */
