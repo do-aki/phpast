@@ -24,6 +24,10 @@ static void ast_destroy(zend_ast *ast);
 static zend_ast *ast_copy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
+static char *phpast_zval_to_string(zval *zv);
+static char *phpast_to_string(zend_ast *ast);
+
+
 
 /* {{{ PHP_INI
  */
@@ -163,6 +167,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getZval, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast___toString, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_enableAstHook, 0, 0, 1)
 	ZEND_ARG_INFO(0, callback)
 ZEND_END_ARG_INFO()
@@ -188,6 +195,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, getKindName, arginfo_phpast_getKindName, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getZval, arginfo_phpast_getZval, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, __toString, arginfo_phpast___toString, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, disableAstHook, arginfo_phpast_disableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, compileFile, arginfo_phpast_compileFile, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -402,6 +410,16 @@ PHP_METHOD(PHPAst, getZval) /* {{{ */
 }
 /* }}} */
 
+PHP_METHOD(PHPAst, __toString) /* {{{ */
+{
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	if (self->ast) {
+		RETVAL_STRING(phpast_to_string(self->ast));
+	}
+}
+/* }}} */
+
 PHP_METHOD(PHPAst, enableAstHook) { /* {{{ */
 
 	zval *callable;
@@ -607,11 +625,161 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 
 	for(i=0; i<num_children; ++i) {
 		zval child_phpast;
-		create_phpast_from_zend_ast(&child_phpast, children[i]);
-		zend_hash_next_index_insert(&self->children, &child_phpast);
+		if (children[i]) {
+			create_phpast_from_zend_ast(&child_phpast, children[i]);
+			zend_hash_next_index_insert(&self->children, &child_phpast);
+		} else {
+			zval tmp;
+			ZVAL_NULL(&tmp);
+			zend_hash_next_index_insert(&self->children, &tmp);
+		}
 	}
 }
 /* }}} */
+
+static char *phpast_zval_to_string(zval *zv) /* {{{ */
+{
+	ZVAL_DEREF(zv);
+	switch (Z_TYPE_P(zv)) {
+		case IS_NULL:	return "NULL";
+		case IS_FALSE:	return "false";
+		case IS_TRUE:	return "true";
+		case IS_LONG:	return "(long)";
+		case IS_DOUBLE:	return "(float)";
+		case IS_STRING:	return "(string)";
+		case IS_ARRAY:	return "(array)";
+		case IS_CONSTANT:	return "(const)";
+		case IS_CONSTANT_AST:	return "(const ast)";
+	}
+
+	ZEND_ASSERT(0);
+	return "";
+}
+/* }}} */
+
+static char *phpast_to_string(zend_ast *ast) /* {{{ */
+{
+	zend_ast_decl *decl;
+
+	switch (ast->kind) {
+		case ZEND_AST_ZVAL:
+			return phpast_zval_to_string(zend_ast_get_zval(ast));
+		case ZEND_AST_CLASS:
+			decl = (zend_ast_decl *) ast;
+			if (decl->flags & ZEND_ACC_INTERFACE) {
+				return "interface";
+			} else if (decl->flags & ZEND_ACC_TRAIT) {
+				return "trait";
+			} else {
+				if (decl->flags & ZEND_ACC_EXPLICIT_ABSTRACT_CLASS) {
+					return "abstract class";
+				} else if (decl->flags & ZEND_ACC_FINAL) {
+					return "final class";
+				} else if (decl->flags & ZEND_ACC_ANON_CLASS) {
+					return "(anonymous) class";
+				} else {
+					return "class";
+				}
+			}
+
+		case ZEND_AST_PROP_DECL:
+			if (ast->attr & ZEND_ACC_STATIC) {
+				if (ast->attr & ZEND_ACC_PUBLIC)    { return "public static"; }
+				if (ast->attr & ZEND_ACC_PROTECTED) { return "protected static"; }
+				if (ast->attr & ZEND_ACC_PRIVATE)   { return "private static"; }
+			} else {
+				if (ast->attr & ZEND_ACC_PUBLIC)    { return "public"; }
+				if (ast->attr & ZEND_ACC_PROTECTED) { return "protected"; }
+				if (ast->attr & ZEND_ACC_PRIVATE)   { return "private"; }
+			}
+			break;
+		case ZEND_AST_USE:
+			switch (ast->attr) {
+				case T_FUNCTION: return "function";
+				case T_CONST:    return "const";
+				case T_CLASS:    return "class";
+			}
+			break;
+		case ZEND_AST_MAGIC_CONST:
+			switch(ast->attr) {
+				case T_LINE:     return "__LINE__";
+				case T_FILE:     return "__FILE__";
+				case T_DIR:      return "__DIR__";
+				case T_TRAIT_C:  return "__TRAIT__";
+				case T_METHOD_C: return "__METHOD__";
+				case T_FUNC_C:   return "__FUNCTION__";
+				case T_NS_C:     return "__NAMESPACE__";
+				case T_CLASS_C:  return "__CLASS__";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+		case ZEND_AST_TYPE:
+			switch (ast->attr) {
+				case IS_ARRAY:    return "array";
+				case IS_CALLABLE: return "callable";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+		case ZEND_AST_CAST:
+			switch(ast->attr) {
+				case IS_NULL:    return "(unset)";
+				case _IS_BOOL:   return "(bool)";
+				case IS_LONG:    return "(int)";
+				case IS_DOUBLE:  return "(float)";
+				case IS_STRING:  return "(string)";
+				case IS_ARRAY:   return "(array)";
+				case IS_OBJECT:  return "(object)";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+		case ZEND_AST_UNARY_OP:
+			switch(ast->attr) {
+				case ZEND_BW_NOT:   return "~";
+				case ZEND_BOOL_NOT: return "!";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+		case ZEND_AST_ASSIGN_OP:
+			switch(ast->attr) {
+				case ZEND_ASSIGN_ADD:    return "+=";
+				case ZEND_ASSIGN_SUB:    return "-=";
+				case ZEND_ASSIGN_MUL:    return "*=";
+				case ZEND_ASSIGN_DIV:    return "/=";
+				case ZEND_ASSIGN_MOD:    return "%=";
+				case ZEND_ASSIGN_SL:     return "<<=";
+				case ZEND_ASSIGN_SR:     return ">>=";
+				case ZEND_ASSIGN_CONCAT: return ".=";
+				case ZEND_ASSIGN_BW_OR:  return "|=";
+				case ZEND_ASSIGN_BW_AND: return "&=";
+				case ZEND_ASSIGN_BW_XOR: return "^=";
+				case ZEND_POW:           return "**=";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+		case ZEND_AST_BINARY_OP:
+			switch(ast->attr) {
+				case ZEND_ADD:                 return "+";
+				case ZEND_SUB:                 return "-";
+				case ZEND_MUL:                 return "*";
+				case ZEND_DIV:                 return "/";
+				case ZEND_MOD:                 return "%";
+				case ZEND_SL:                  return "<<";
+				case ZEND_SR:                  return ">>";
+				case ZEND_CONCAT:              return ".";
+				case ZEND_BW_OR:               return "|";
+				case ZEND_BW_AND:              return "&";
+				case ZEND_BW_XOR:              return "^";
+				case ZEND_IS_IDENTICAL:        return "===";
+				case ZEND_IS_NOT_IDENTICAL:    return "!==";
+				case ZEND_IS_EQUAL:            return "==";
+				case ZEND_IS_NOT_EQUAL:        return "!=";
+				case ZEND_IS_SMALLER:          return "<";
+				case ZEND_IS_SMALLER_OR_EQUAL: return "<=";
+				case ZEND_POW:                 return "**";
+				case ZEND_BOOL_XOR:            return "xor";
+				case ZEND_SPACESHIP:           return "<=>";
+				EMPTY_SWITCH_DEFAULT_CASE();
+			}
+	}
+	return "";
+}
+/* }}} */
+
 
 /*
  * Local variables:
