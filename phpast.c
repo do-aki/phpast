@@ -154,6 +154,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getChildCount, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getChildren, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getKind, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -190,6 +193,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, __destruct, arginfo_phpast___destruct, ZEND_ACC_DTOR|ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, eachChild, arginfo_phpast_eachChild, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getChildCount, arginfo_phpast_getChildCount, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, getChildren, arginfo_phpast_getChildren, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getKind, arginfo_phpast_getKind, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getKindName, arginfo_phpast_getKindName, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
@@ -353,6 +357,15 @@ PHP_METHOD(PHPAst, getChildCount) /* {{{ */
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETURN_LONG(self->num_children);
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, getChildren) /* {{{ */
+{
+	zend_string *s;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	RETURN_ARR(zend_array_dup(&self->children));
 }
 /* }}} */
 

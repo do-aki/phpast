@@ -46,6 +46,7 @@ PHP_METHOD(PHPAst, __construct);
 PHP_METHOD(PHPAst, __destruct);
 PHP_METHOD(PHPAst, eachChild);
 PHP_METHOD(PHPAst, getChildCount);
+PHP_METHOD(PHPAst, getChildren);
 PHP_METHOD(PHPAst, getKind);
 PHP_METHOD(PHPAst, getKindName);
 PHP_METHOD(PHPAst, isZval);
