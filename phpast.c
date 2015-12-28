@@ -21,11 +21,10 @@ zend_ast_process_t original_ast_process = NULL;
 
 static int ast_is_decl(zend_ast *ast);
 static void ast_destroy(zend_ast *ast);
-static zend_ast *ast_copy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
 static char *phpast_zval_to_string(zval *zv);
-static char *phpast_to_string(zend_ast *ast);
+static char *phpast_to_string(phpast_obj *self);
 
 
 
@@ -353,15 +352,7 @@ PHP_METHOD(PHPAst, getChildCount) /* {{{ */
 	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast) {
-		if (zend_ast_is_list(self->ast)) {
-			RETURN_LONG(((zend_ast_list*)self->ast)->children);
-		} else if (ast_is_decl(self->ast)) {
-			RETURN_LONG(4);
-		} else {
-			RETURN_LONG(zend_ast_get_num_children(self->ast));
-		}
-	}
+	RETURN_LONG(self->num_children);
 }
 /* }}} */
 
@@ -370,9 +361,7 @@ PHP_METHOD(PHPAst, getKind) /* {{{ */
 	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast) {
-		RETURN_LONG(self->ast->kind);
-	}
+	RETURN_LONG(self->kind);
 }
 /* }}} */
 
@@ -381,9 +370,7 @@ PHP_METHOD(PHPAst, getKindName) /* {{{ */
 	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast) {
-		RETURN_STRING(phpast_get_kind_name(self->ast->kind));
-	}
+	RETURN_STRING(phpast_get_kind_name(self->kind));
 }
 /* }}} */
 
@@ -392,7 +379,7 @@ PHP_METHOD(PHPAst, isZval) /* {{{ */
 	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast && self->ast->kind == ZEND_AST_ZVAL) {
+	if (self->kind == ZEND_AST_ZVAL) {
 		RETURN_TRUE;
 	}
 	RETURN_FALSE;
@@ -404,8 +391,8 @@ PHP_METHOD(PHPAst, getZval) /* {{{ */
 	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast && self->ast->kind == ZEND_AST_ZVAL) {
-		RETURN_ZVAL(zend_ast_get_zval(self->ast), 0, 0);
+	if (self->kind == ZEND_AST_ZVAL) {
+		RETURN_ZVAL(&self->val, 0, 0);
 	}
 }
 /* }}} */
@@ -414,9 +401,7 @@ PHP_METHOD(PHPAst, __toString) /* {{{ */
 {
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
-	if (self->ast) {
-		RETVAL_STRING(phpast_to_string(self->ast));
-	}
+	RETVAL_STRING(phpast_to_string(self));
 }
 /* }}} */
 
@@ -532,40 +517,6 @@ static void ast_destroy(zend_ast *ast) { /* {{{ */
 }
 /* }}} */
 
-static zend_ast *ast_copy(zend_ast *ast) { /* {{{ */
-	if (ast == NULL) {
-		return NULL;
-	} else if (ast->kind == ZEND_AST_ZVAL) {
-		zend_ast_zval *new = emalloc(sizeof(zend_ast_zval));
-		new->kind = ZEND_AST_ZVAL;
-		new->attr = ast->attr;
-		ZVAL_COPY(&new->val, zend_ast_get_zval(ast));
-		return (zend_ast *) new;
-	} else if (ast_is_decl(ast)) {
-		zend_ast_decl *decl = (zend_ast_decl *) ast;
-		zend_ast_decl *new = emalloc(sizeof(zend_ast_decl));
-		new->kind = decl->kind;
-		new->attr = decl->attr;
-		new->flags = decl->flags;
-		new->doc_comment = decl->doc_comment;
-		new->name = decl->name;
-		return (zend_ast *) new;
-	} else if (zend_ast_is_list(ast)) {
-		zend_ast_list *list = zend_ast_get_list(ast);
-		zend_ast_list *new = emalloc(sizeof(zend_ast_list) - sizeof(zend_ast *)); // no child
-		new->kind = list->kind;
-		new->attr = list->attr;
-		new->children = list->children;
-		return (zend_ast *) new;
-	} else {
-		zend_ast *new = emalloc(sizeof(zend_ast));
-		new->kind = ast->kind;
-		new->attr = ast->attr;
-		return new;
-	}
-}
-/* }}} */
-
 static zend_object *phpast_new(zend_class_entry *class_type) /* {{{ */
 {
 	phpast_obj *self;
@@ -585,8 +536,16 @@ static void phpast_free(zend_object *object) /* {{{ */
 {
 	phpast_obj *self = phpast_obj_from_obj(object);
 
-	if (self->ast && self->is_owner) {
-		ast_destroy(self->ast);
+	if (self->doc_comment) {
+		zend_string_release(self->doc_comment);
+	}
+
+	if (self->name) {
+		zend_string_release(self->name);
+	}
+
+	if (self->kind == ZEND_AST_ZVAL) {
+		zval_ptr_dtor_nogc(&self->val);
 	}
 
 	zend_hash_destroy(&self->children);
@@ -599,40 +558,60 @@ static void phpast_free(zend_object *object) /* {{{ */
 
 static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 {
-	int i, num_children = 0;
-	zend_ast **children;
+	int i;
+	zend_ast **ast_children;
 	phpast_obj *self;
 
 	object_init_ex(obj, ce_phpast);
 	self = Z_PHPAST_P(obj);
-	self->is_owner = 1;
-	self->ast = ast_copy(ast);
 
-	if (zend_ast_is_list(ast)) {
-		zend_ast_list *list = (zend_ast_list*)ast;
-		num_children = list->children;
-		children = list->child;
-//		php_printf("is_list (%d)\n", num_children);
-	} else if (ast_is_decl(ast)) {
-		zend_ast_decl *decl = (zend_ast_decl*)ast;
-		num_children = 4;
-		children = decl->child;
+	ZEND_ASSERT(ast);
+	if (ast->kind == ZEND_AST_ZVAL) {
+		zend_ast_zval *zv = (zend_ast_zval*) ast;
+		self->kind = ZEND_AST_ZVAL;
+		self->attr = zv->attr;
+		self->lineno = zv->val.u2.lineno;
+		ZVAL_COPY(&self->val, &zv->val);
+		return;
+	}
+	
+	if (ast_is_decl(ast)) {
+		zend_ast_decl *decl = (zend_ast_decl *) ast;
+		self->kind = decl->kind;
+		self->attr = decl->attr;
+		self->start_lineno = decl->start_lineno;
+		self->end_lineno = decl->end_lineno;
+		self->flags = decl->flags;
+		self->doc_comment = zend_string_copy(decl->doc_comment);
+		self->name = zend_string_copy(decl->name);
+
+		self->num_children = 4;
+		ast_children = decl->child;
+	} else if (zend_ast_is_list(ast)) {
+		zend_ast_list *list = zend_ast_get_list(ast);
+		self->kind = list->kind;
+		self->attr = list->attr;
+		self->lineno = list->lineno;
+
+		self->num_children = list->children;
+		ast_children = list->child;
 	} else {
-		num_children = zend_ast_get_num_children(ast);
-		children = ast->child;
-//		php_printf("num_children (%d)\n", num_children);
+		self->kind = ast->kind;
+		self->attr = ast->attr;
+		self->lineno = ast->lineno;
+
+		self->num_children = zend_ast_get_num_children(ast);
+		ast_children = ast->child;
 	}
 
-	for(i=0; i<num_children; ++i) {
+	for(i=0; i<self->num_children; ++i) {
 		zval child_phpast;
-		if (children[i]) {
-			create_phpast_from_zend_ast(&child_phpast, children[i]);
-			zend_hash_next_index_insert(&self->children, &child_phpast);
+		if (ast_children[i]) {
+			create_phpast_from_zend_ast(&child_phpast, ast_children[i]);
 		} else {
-			zval tmp;
-			ZVAL_NULL(&tmp);
-			zend_hash_next_index_insert(&self->children, &tmp);
+			ZVAL_NULL(&child_phpast);
 		}
+		zend_hash_next_index_insert(&self->children, &child_phpast);
 	}
 }
 /* }}} */
@@ -657,25 +636,22 @@ static char *phpast_zval_to_string(zval *zv) /* {{{ */
 }
 /* }}} */
 
-static char *phpast_to_string(zend_ast *ast) /* {{{ */
+static char *phpast_to_string(phpast_obj *obj) /* {{{ */
 {
-	zend_ast_decl *decl;
-
-	switch (ast->kind) {
+	switch (obj->kind) {
 		case ZEND_AST_ZVAL:
-			return phpast_zval_to_string(zend_ast_get_zval(ast));
+			return phpast_zval_to_string(&obj->val);
 		case ZEND_AST_CLASS:
-			decl = (zend_ast_decl *) ast;
-			if (decl->flags & ZEND_ACC_INTERFACE) {
+			if (obj->flags & ZEND_ACC_INTERFACE) {
 				return "interface";
-			} else if (decl->flags & ZEND_ACC_TRAIT) {
+			} else if (obj->flags & ZEND_ACC_TRAIT) {
 				return "trait";
 			} else {
-				if (decl->flags & ZEND_ACC_EXPLICIT_ABSTRACT_CLASS) {
+				if (obj->flags & ZEND_ACC_EXPLICIT_ABSTRACT_CLASS) {
 					return "abstract class";
-				} else if (decl->flags & ZEND_ACC_FINAL) {
+				} else if (obj->flags & ZEND_ACC_FINAL) {
 					return "final class";
-				} else if (decl->flags & ZEND_ACC_ANON_CLASS) {
+				} else if (obj->flags & ZEND_ACC_ANON_CLASS) {
 					return "(anonymous) class";
 				} else {
 					return "class";
@@ -683,25 +659,25 @@ static char *phpast_to_string(zend_ast *ast) /* {{{ */
 			}
 
 		case ZEND_AST_PROP_DECL:
-			if (ast->attr & ZEND_ACC_STATIC) {
-				if (ast->attr & ZEND_ACC_PUBLIC)    { return "public static"; }
-				if (ast->attr & ZEND_ACC_PROTECTED) { return "protected static"; }
-				if (ast->attr & ZEND_ACC_PRIVATE)   { return "private static"; }
+			if (obj->attr & ZEND_ACC_STATIC) {
+				if (obj->attr & ZEND_ACC_PUBLIC)    { return "public static"; }
+				if (obj->attr & ZEND_ACC_PROTECTED) { return "protected static"; }
+				if (obj->attr & ZEND_ACC_PRIVATE)   { return "private static"; }
 			} else {
-				if (ast->attr & ZEND_ACC_PUBLIC)    { return "public"; }
-				if (ast->attr & ZEND_ACC_PROTECTED) { return "protected"; }
-				if (ast->attr & ZEND_ACC_PRIVATE)   { return "private"; }
+				if (obj->attr & ZEND_ACC_PUBLIC)    { return "public"; }
+				if (obj->attr & ZEND_ACC_PROTECTED) { return "protected"; }
+				if (obj->attr & ZEND_ACC_PRIVATE)   { return "private"; }
 			}
 			break;
 		case ZEND_AST_USE:
-			switch (ast->attr) {
+			switch (obj->attr) {
 				case T_FUNCTION: return "function";
 				case T_CONST:    return "const";
 				case T_CLASS:    return "class";
 			}
 			break;
 		case ZEND_AST_MAGIC_CONST:
-			switch(ast->attr) {
+			switch(obj->attr) {
 				case T_LINE:     return "__LINE__";
 				case T_FILE:     return "__FILE__";
 				case T_DIR:      return "__DIR__";
@@ -713,30 +689,30 @@ static char *phpast_to_string(zend_ast *ast) /* {{{ */
 				EMPTY_SWITCH_DEFAULT_CASE();
 			}
 		case ZEND_AST_TYPE:
-			switch (ast->attr) {
+			switch (obj->attr) {
 				case IS_ARRAY:    return "array";
 				case IS_CALLABLE: return "callable";
 				EMPTY_SWITCH_DEFAULT_CASE();
 			}
 		case ZEND_AST_CAST:
-			switch(ast->attr) {
+			switch(obj->attr) {
 				case IS_NULL:    return "(unset)";
 				case _IS_BOOL:   return "(bool)";
 				case IS_LONG:    return "(int)";
 				case IS_DOUBLE:  return "(float)";
 				case IS_STRING:  return "(string)";
 				case IS_ARRAY:   return "(array)";
-				case IS_OBJECT:  return "(object)";
+				case IS_OBJECT:  return "(selfect)";
 				EMPTY_SWITCH_DEFAULT_CASE();
 			}
 		case ZEND_AST_UNARY_OP:
-			switch(ast->attr) {
+			switch(obj->attr) {
 				case ZEND_BW_NOT:   return "~";
 				case ZEND_BOOL_NOT: return "!";
 				EMPTY_SWITCH_DEFAULT_CASE();
 			}
 		case ZEND_AST_ASSIGN_OP:
-			switch(ast->attr) {
+			switch(obj->attr) {
 				case ZEND_ASSIGN_ADD:    return "+=";
 				case ZEND_ASSIGN_SUB:    return "-=";
 				case ZEND_ASSIGN_MUL:    return "*=";
@@ -752,7 +728,7 @@ static char *phpast_to_string(zend_ast *ast) /* {{{ */
 				EMPTY_SWITCH_DEFAULT_CASE();
 			}
 		case ZEND_AST_BINARY_OP:
-			switch(ast->attr) {
+			switch(obj->attr) {
 				case ZEND_ADD:                 return "+";
 				case ZEND_SUB:                 return "-";
 				case ZEND_MUL:                 return "*";

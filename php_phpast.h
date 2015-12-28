@@ -58,10 +58,18 @@ PHP_METHOD(PHPAst, compileString);
 
 
 typedef struct _phpast_obj {
-    zend_ast    *ast;
-    char         is_owner;
-    zend_array   children;
-    zend_object  std;
+    zend_ast_kind kind;
+    zend_ast_attr attr;
+    uint32_t      lineno;
+    uint32_t      start_lineno;
+    uint32_t      end_lineno;
+    uint32_t      flags;
+    zend_string   *doc_comment;
+    zend_string   *name;
+    zval          val;
+    uint32_t      num_children;
+    zend_array    children;
+    zend_object   std;
 } phpast_obj;
 
 static inline phpast_obj *phpast_obj_from_obj(zend_object *obj) {
