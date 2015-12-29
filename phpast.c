@@ -172,6 +172,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast___toString, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast___debugInfo, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_enableAstHook, 0, 0, 1)
 	ZEND_ARG_INFO(0, callback)
 ZEND_END_ARG_INFO()
@@ -199,6 +202,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getZval, arginfo_phpast_getZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, __toString, arginfo_phpast___toString, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, __debugInfo, arginfo_phpast___debugInfo, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, disableAstHook, arginfo_phpast_disableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	PHP_ME(PHPAst, compileFile, arginfo_phpast_compileFile, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -415,6 +419,55 @@ PHP_METHOD(PHPAst, __toString) /* {{{ */
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETVAL_STRING(phpast_to_string(self));
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, __debugInfo) /* {{{ */
+{
+	zval tmp;
+	zend_array* debug_info;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	ALLOC_HASHTABLE(debug_info);
+	zend_hash_init(debug_info, 8, NULL, ZVAL_PTR_DTOR, 0);
+
+	ZVAL_STRING(&tmp, phpast_get_kind_name(self->kind));
+	zend_hash_str_update(debug_info, "kind", sizeof("kind")-1, &tmp);
+
+	ZVAL_LONG(&tmp, self->attr);
+	zend_hash_str_update(debug_info, "attr", sizeof("attr")-1, &tmp);
+
+	ZVAL_LONG(&tmp, self->lineno);
+	zend_hash_str_update(debug_info, "lineno", sizeof("lineno")-1, &tmp);
+
+	ZVAL_LONG(&tmp, self->start_lineno);
+	zend_hash_str_update(debug_info, "start_lineno", sizeof("start_lineno")-1, &tmp);
+
+	ZVAL_LONG(&tmp, self->end_lineno);
+	zend_hash_str_update(debug_info, "end_lineno", sizeof("end_lineno")-1, &tmp);
+
+	ZVAL_LONG(&tmp, self->flags);
+	zend_hash_str_update(debug_info, "flags", sizeof("flags")-1, &tmp);
+
+	if (self->doc_comment) {
+		ZVAL_STR(&tmp, self->doc_comment);
+		zend_hash_str_update(debug_info, "doc_comment", sizeof("doc_comment")-1, &tmp);
+	}
+
+	if (self->name) {
+		ZVAL_STR(&tmp, self->name);
+		zend_hash_str_update(debug_info, "name", sizeof("name")-1, &tmp);
+	}
+
+	zend_hash_str_update(debug_info, "zval", sizeof("zval")-1, &self->val);
+
+	ZVAL_STRING(&tmp, phpast_to_string(self));
+	zend_hash_str_update(debug_info, "__toString", sizeof("__toString")-1, &tmp);
+
+	ZVAL_ARR(&tmp, &self->children);
+	zend_hash_str_update(debug_info, "children", sizeof("children")-1, &tmp);
+
+	RETURN_ARR(debug_info);
 }
 /* }}} */
 
