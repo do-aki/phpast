@@ -20,6 +20,7 @@ static zend_object_handlers phpast_object_handlers;
 zend_ast_process_t original_ast_process = NULL;
 
 static zend_bool ast_kind_is_decl(zend_ast_kind kind);
+static zend_bool ast_kind_is_list(zend_ast_kind kind);
 static void ast_destroy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
@@ -589,6 +590,13 @@ static zend_bool ast_kind_is_decl(zend_ast_kind kind) /* {{{ */
 }
 /* }}} */
 
+static zend_bool ast_kind_is_list(zend_ast_kind kind) /* {{{ */
+{
+	// see: zend_ast_is_list
+	return (kind >> ZEND_AST_IS_LIST_SHIFT) & 1;
+}
+/* }}} */
+
 static void ast_destroy(zend_ast *ast) { /* {{{ */
 	if (ast == NULL) {
 		return;
@@ -671,7 +679,7 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 
 		self->num_children = 4;
 		ast_children = decl->child;
-	} else if (zend_ast_is_list(ast)) {
+	} else if (ast_kind_is_list(ast->kind)) {
 		zend_ast_list *list = zend_ast_get_list(ast);
 		self->kind = list->kind;
 		self->attr = list->attr;
