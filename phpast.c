@@ -21,12 +21,14 @@ zend_ast_process_t original_ast_process = NULL;
 
 static zend_bool ast_kind_is_decl(zend_ast_kind kind);
 static zend_bool ast_kind_is_list(zend_ast_kind kind);
+static uint32_t ast_kind_get_num_children(zend_ast_kind kind);
 static void ast_destroy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
 static char *phpast_zval_to_string(zval *zv);
 static char *phpast_to_string(phpast_obj *self);
 
+static zend_ast *create_zend_ast_from_phpast(phpast_obj *obj);
 
 
 /* {{{ PHP_INI
@@ -298,6 +300,15 @@ void php_ast_process(zend_ast *ast) { /* {{{ */
 
 	if (call_user_function(EG(function_table), NULL, 
 		&PHPAST_G(hook_callable), &retval, 1, args) == SUCCESS &&  Z_TYPE(retval) != IS_UNDEF) {
+
+		if (zend_is_true(&retval)) {
+			if (Z_TYPE(retval) != IS_OBJECT || !instanceof_function(Z_OBJCE(retval), ce_phpast)) {
+				zend_throw_error(NULL, "return value must be PHPAst Object");
+			}
+
+			CG(ast) = create_zend_ast_from_phpast(Z_PHPAST_P(&retval));
+		}
+
 		zval_ptr_dtor(&retval);
 	}
 
@@ -597,6 +608,14 @@ static zend_bool ast_kind_is_list(zend_ast_kind kind) /* {{{ */
 }
 /* }}} */
 
+static uint32_t ast_kind_get_num_children(zend_ast_kind kind) /* {{{ */
+{
+	// see: zend_ast_get_num_children
+	ZEND_ASSERT(!ast_kind_is_list(kind));
+	return kind >> ZEND_AST_NUM_CHILDREN_SHIFT;
+}
+/* }}} */
+
 static void ast_destroy(zend_ast *ast) { /* {{{ */
 	if (ast == NULL) {
 		return;
@@ -705,6 +724,78 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 		}
 		zend_hash_next_index_insert(&self->children, &child_phpast);
 	}
+}
+/* }}} */
+
+static zend_ast *create_zend_ast_from_phpast(phpast_obj *obj) { /* {{{ */
+
+	zend_ast *new;
+
+	if (obj->kind == ZEND_AST_ZVAL) {
+		return zend_ast_create_zval_ex(&obj->val, obj->attr);
+	} else if (ast_kind_is_decl(obj->kind)) {
+		zend_ast *child1, *child2, *child3, *child4;
+		HashPosition pos = 0;
+
+		child1 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos))); ++pos;
+		child2 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos))); ++pos;
+		child3 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos))); ++pos;
+		child4 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos)));
+
+		return zend_ast_create_decl(
+			obj->kind,
+			obj->flags,
+			obj->start_lineno,
+			zend_string_copy(obj->doc_comment),
+			zend_string_copy(obj->name),
+			child1, child2, child3, child4
+		);
+	}
+	
+	if (ast_kind_is_list(obj->kind)) {
+		zval *child;
+
+		new = zend_ast_create_list(0, obj->kind);
+		new->lineno = obj->lineno;
+
+		ZEND_HASH_FOREACH_VAL(&obj->children, child) {
+			zend_ast_list_add(new, create_zend_ast_from_phpast(Z_PHPAST_P(child)));
+		} ZEND_HASH_FOREACH_END();
+
+		return new;
+	} else {
+		uint32_t child_num = ast_kind_get_num_children(obj->kind);
+		HashPosition pos = 0;
+		zend_ast *child1, *child2, *child3, *child4;
+		
+		if (child_num == 0) {
+			return zend_ast_create_ex(obj->kind, obj->attr);
+		}
+
+		child1 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos)));
+		if (child_num == 1) {
+			return zend_ast_create_ex(obj->kind, obj->attr, child1);
+		}
+
+		++pos;
+		child2 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos)));
+		if (child_num == 2) {
+			return zend_ast_create_ex(obj->kind, obj->attr, child1, child2);
+		}
+
+		++pos;
+		child3 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos)));
+		if (child_num == 3) {
+			return zend_ast_create_ex(obj->kind, obj->attr, child1, child2, child3);
+		}
+
+		++pos;
+		child4 = create_zend_ast_from_phpast(Z_PHPAST_P(zend_hash_get_current_data_ex(&obj->children, &pos)));
+		if (child_num == 4) {
+			return zend_ast_create_ex(obj->kind, obj->attr, child1, child2, child3, child4);
+		}
+	}
+
 }
 /* }}} */
 
