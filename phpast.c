@@ -169,6 +169,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_getZval, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast_setZval, 0, 0, 1)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_phpast___toString, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -201,6 +204,7 @@ static const zend_function_entry phpast_methods[] = {
 	PHP_ME(PHPAst, getKindName, arginfo_phpast_getKindName, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, isZval, arginfo_phpast_isZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, getZval, arginfo_phpast_getZval, ZEND_ACC_PUBLIC)
+	PHP_ME(PHPAst, setZval, arginfo_phpast_setZval, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, __toString, arginfo_phpast___toString, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, __debugInfo, arginfo_phpast___debugInfo, ZEND_ACC_PUBLIC)
 	PHP_ME(PHPAst, enableAstHook, arginfo_phpast_enableAstHook, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -411,6 +415,20 @@ PHP_METHOD(PHPAst, getZval) /* {{{ */
 	if (self->kind == ZEND_AST_ZVAL) {
 		RETURN_ZVAL(&self->val, 0, 0);
 	}
+}
+/* }}} */
+
+PHP_METHOD(PHPAst, setZval) /* {{{ */
+{
+	zval *zv;
+	phpast_obj *self = Z_PHPAST_P(getThis());
+
+	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+		Z_PARAM_ZVAL(zv)
+	ZEND_PARSE_PARAMETERS_END();
+
+	zval_ptr_dtor(&self->val);
+	ZVAL_COPY(&self->val, zv);
 }
 /* }}} */
 
