@@ -19,7 +19,7 @@ static zend_class_entry *ce_phpast;
 static zend_object_handlers phpast_object_handlers;
 zend_ast_process_t original_ast_process = NULL;
 
-static int ast_is_decl(zend_ast *ast);
+static zend_bool ast_kind_is_decl(zend_ast_kind kind);
 static void ast_destroy(zend_ast *ast);
 static zend_object *phpast_new(zend_class_entry *class_type);
 static void phpast_free(zend_object *object);
@@ -578,13 +578,13 @@ PHP_METHOD(PHPAst, compileString) /* {{{ */
 }
 /* }}} */
 
-static int ast_is_decl(zend_ast *ast) /* {{{ */
+static zend_bool ast_kind_is_decl(zend_ast_kind kind) /* {{{ */
 {
     return (
-        ast->kind == ZEND_AST_FUNC_DECL ||
-        ast->kind == ZEND_AST_CLOSURE ||
-        ast->kind == ZEND_AST_METHOD ||
-        ast->kind == ZEND_AST_CLASS
+        kind == ZEND_AST_FUNC_DECL ||
+        kind == ZEND_AST_CLOSURE ||
+        kind == ZEND_AST_METHOD ||
+        kind == ZEND_AST_CLASS
     );
 }
 /* }}} */
@@ -659,7 +659,7 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 		return;
 	}
 	
-	if (ast_is_decl(ast)) {
+	if (ast_kind_is_decl(ast->kind)) {
 		zend_ast_decl *decl = (zend_ast_decl *) ast;
 		self->kind = decl->kind;
 		self->attr = decl->attr;
