@@ -684,7 +684,12 @@ static void create_phpast_from_zend_ast(zval *obj, zend_ast *ast) /* {{{ */
 		self->start_lineno = decl->start_lineno;
 		self->end_lineno = decl->end_lineno;
 		self->flags = decl->flags;
-		self->doc_comment = zend_string_copy(decl->doc_comment);
+		if (decl->doc_comment) {
+			self->doc_comment = zend_string_copy(decl->doc_comment);
+		}
+		else {
+			self->doc_comment = NULL;
+		}
 		self->name = zend_string_copy(decl->name);
 
 		self->num_children = 4;
