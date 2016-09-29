@@ -351,6 +351,8 @@ static int phpast_each_child(zval *zv, int num_args, va_list args, zend_hash_key
 	}
 
 	zval_ptr_dtor(&params[0]);
+
+	return ZEND_HASH_APPLY_KEEP;
 }
 /* }}} */
 
