@@ -51,7 +51,7 @@ PHP_INI_END()
 PHP_FUNCTION(confirm_phpast_compiled)
 {
 	char *arg = NULL;
-	size_t arg_len, len;
+	size_t arg_len;
 	zend_string *strg;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &arg, &arg_len) == FAILURE) {
@@ -288,7 +288,6 @@ void unhook_ast_process() /* {{{ */
 void php_ast_process(zend_ast *ast) { /* {{{ */
 	zval args[1];
 	zval retval;
-	zend_string *s;
 
 	if (Z_ISUNDEF(PHPAST_G(hook_callable))) {
 		return;
@@ -321,7 +320,6 @@ void php_ast_process(zend_ast *ast) { /* {{{ */
 PHP_METHOD(PHPAst, __construct) /* {{{ */
 {
 	zend_long kind;
-	zend_ast  *ast;
 
 	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
 		Z_PARAM_LONG(kind)
@@ -360,7 +358,6 @@ PHP_METHOD(PHPAst, eachChild) /* {{{ */
 {
 	zend_fcall_info fci;
 	zend_fcall_info_cache fci_cache;
-	zval retval, args[1];
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
@@ -373,7 +370,6 @@ PHP_METHOD(PHPAst, eachChild) /* {{{ */
 
 PHP_METHOD(PHPAst, getChildCount) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETURN_LONG(self->num_children);
@@ -382,7 +378,6 @@ PHP_METHOD(PHPAst, getChildCount) /* {{{ */
 
 PHP_METHOD(PHPAst, getChildren) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETURN_ARR(zend_array_dup(&self->children));
@@ -391,7 +386,6 @@ PHP_METHOD(PHPAst, getChildren) /* {{{ */
 
 PHP_METHOD(PHPAst, getKind) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETURN_LONG(self->kind);
@@ -400,7 +394,6 @@ PHP_METHOD(PHPAst, getKind) /* {{{ */
 
 PHP_METHOD(PHPAst, getKindName) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	RETURN_STRING(phpast_get_kind_name(self->kind));
@@ -409,7 +402,6 @@ PHP_METHOD(PHPAst, getKindName) /* {{{ */
 
 PHP_METHOD(PHPAst, isZval) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	if (self->kind == ZEND_AST_ZVAL) {
@@ -421,7 +413,6 @@ PHP_METHOD(PHPAst, isZval) /* {{{ */
 
 PHP_METHOD(PHPAst, getZval) /* {{{ */
 {
-	zend_string *s;
 	phpast_obj *self = Z_PHPAST_P(getThis());
 
 	if (self->kind == ZEND_AST_ZVAL) {
