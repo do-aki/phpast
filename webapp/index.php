@@ -90,13 +90,24 @@ $converter = (new class {
 });
 
 if (isset($_POST['code'])) {
-    $converter->parseCode($_POST['code']);
+    $code = $_POST['code'];
+    $converter->parseCode($code);
+} else {
+    $code = <<<'_EOC_'
+function hello($name) {
+    echo "Hello {$name}" . PHP_EOL;
 }
+
+hello('php');
+
+_EOC_;
+}
+
 
 ?>
 <html>
 <form method="post">
-  <textarea name="code" style="width:300px;height:100px;"><?php echo htmlspecialchars(@$_POST['code']); ?></textarea>
+  <textarea name="code" style="width:300px;height:100px;"><?php echo htmlspecialchars($code); ?></textarea>
   <input type="submit" />
 </form>
 
